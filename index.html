@@ -89,6 +89,23 @@
   .testflag { background: #8a3b2a; color: #fff; text-align: center; font-size: 13px; padding: 4px; }
   .fade { animation: fade .25s ease; }
   @keyframes fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+  /* 專注版 */
+  .card { border: 0; box-shadow: none; background: transparent; padding: 8px 4px; margin-top: 10px; }
+  .fade { animation: none; }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+  .eyebrow { color: var(--sub); font-weight: 400; letter-spacing: 0; }
+  header { border-bottom: 0; }
+  .crumb { font-size: 14px; }
+  .qline { margin: 0 0 10px; font-size: 18px; line-height: 1.75; }
+  .qask { display: block; margin-top: 14px; font-size: 19px; font-weight: 700; color: var(--ink); }
+  .opt { min-height: 58px; }
+  details.more { margin-top: 14px; }
+  details.more summary { color: var(--accent); cursor: pointer; font-size: 15px; padding: 8px 0; }
+  details.more[open] summary { margin-bottom: 8px; }
+  .ask-big { font-size: 20px; font-weight: 600; line-height: 1.6; margin: 10px 0 6px; }
+  .btn.ghost { border: 0; padding-left: 4px; padding-right: 4px; text-decoration: underline; text-underline-offset: 3px; font-weight: 400; }
+  .saved { min-width: 0; }
+  .savefail { border: 1px solid var(--warm); }
 </style>
 </head>
 <body>
@@ -146,7 +163,12 @@ function isAnswered(q) {
 }
 
 function drawSegs() {
-  var h = '';
+  var p0 = pages[cur], h = '';
+  if (p0.t === 'welcome' || p0.t === 'end') { document.getElementById('segs').innerHTML = ''; return; }
+  var sx = SECS[p0.s], seen0 = 0;
+  for (var i0 = 0; i0 <= cur; i0++) if (pages[i0].t === 'q' && pages[i0].s === p0.s) seen0++;
+  document.getElementById('segs').innerHTML = '<div class="seg here"><i style="width:' + Math.round(seen0 / sx.items.length * 100) + '%"></i></div>';
+  return;
   SECS.forEach(function (s, si) {
     var seen = 0;
     for (var i = 0; i <= cur; i++) if (pages[i].t === 'q' && pages[i].s === si) seen++;
@@ -155,7 +177,12 @@ function drawSegs() {
   });
   document.getElementById('segs').innerHTML = h;
 }
-function qHtml(t) { // bold the final question sentence
+function qHtml(t) {
+  var parts = String(t).replace(/([。；？])/g, '$1\n').split('\n').map(function (x) { return x.trim(); }).filter(Boolean), out = '';
+  parts.forEach(function (x) { out += /？$/.test(x) ? '<span class="qask">' + esc(x) + '</span>' : '<p class="qline">' + esc(x) + '</p>'; });
+  return out;
+}
+function qHtmlOld(t) {
   var m = t.match(/^(.*[。」）])([^。]*？)$/);
   return m ? esc(m[1]) + '<strong class="ask">' + esc(m[2]) + '</strong>' : esc(t);
 }
@@ -167,33 +194,31 @@ function render(keep) {
   next.textContent = '下一步';
   var done = qIndex();
   drawSegs();
-  document.getElementById('crumbR').textContent = '已看過 ' + done + '／' + totalQ + ' 題';
+  document.getElementById('crumbR').textContent = (p.t === 'q') ? ('這一段 第 ' + (p.q + 1) + '／' + SECS[p.s].items.length + ' 題') : '';
 
   if (p.t === 'welcome') {
     var W = DATA.welcome;
     document.getElementById('crumbL').textContent = '開始';
     html += '<div class="card fade"><div class="eyebrow">恩備的新規則</div><h1>' + esc(W.title) + '</h1>';
     W.paras.forEach(function (x) { html += '<p class="lead">' + esc(x) + '</p>'; });
-    html += '<div class="box"><b>怎麼填</b><ul class="points">';
+    html += '<p class="ask-big">一共 ' + SECS.length + ' 段，一次填一段就好，關掉再打開會接著填。</p>';
+    html += '<details class="more"><summary>怎麼填、填完之後（選讀）</summary><ul class="points">';
     W.how.forEach(function (x) { html += '<li>' + esc(x) + '</li>'; });
-    html += '</ul></div><div class="box warm"><b>填完之後</b>' + esc(W.after) + '</div>';
-    html += '<p class="muted">一共五段：</p><ul class="sec-list">';
-    SECS.forEach(function (s, si) { html += '<li class="' + (secDone(si) ? 'done' : '') + '"><span>' + esc(s.name) + '</span><span>' + s.items.length + ' 題・約 ' + mins(s.items.length) + ' 分鐘</span></li>'; });
-    html += '</ul></div>';
+    html += '</ul><p>' + esc(W.after) + '</p></details></div>';
     next.textContent = hasAny() ? '從上次的地方繼續' : '開始';
   } else if (p.t === 'intro') {
     var s = SECS[p.s];
     document.getElementById('crumbL').textContent = '第 ' + (p.s + 1) + ' 段／共 ' + SECS.length + ' 段';
     html += '<div class="card fade"><div class="eyebrow">第 ' + (p.s + 1) + ' 段・' + s.items.length + ' 題・約 ' + mins(s.items.length) + ' 分鐘</div><h1>' + esc(s.name) + '</h1>';
-    html += '<div class="box"><b>這一段想問你的是</b>' + esc(s.ask) + '</div>';
-    html += '<p class="muted">先說前因後果：</p>';
+    html += '<p class="ask-big">' + esc(s.ask) + '</p>';
+    html += '<details class="more"><summary>想先看前因後果（選讀）</summary>';
     s.intro.split('\n').forEach(function (x) { html += '<p>' + esc(x) + '</p>'; });
-    html += '</div>';
+    html += '</details></div>';
     next.textContent = '開始這一段';
   } else if (p.t === 'q') {
     var s2 = SECS[p.s], q = s2.items[p.q];
-    document.getElementById('crumbL').textContent = '第 ' + (p.s + 1) + ' 段・' + s2.name;
-    html += '<div class="card fade"><div class="eyebrow">第 ' + (p.q + 1) + ' 題／' + s2.items.length + '・' + esc(q.short) + '</div>';
+    document.getElementById('crumbL').textContent = s2.name;
+    html += '<div class="card">';
     html += '<div class="qtext">' + qHtml(q.text) + '</div>' + renderQ(q) + '</div>';
   } else if (p.t === 'secnote') {
     var s3 = SECS[p.s], nid = s3.key + '｜本段想說的話';
@@ -206,8 +231,7 @@ function render(keep) {
     document.getElementById('crumbL').textContent = '休息一下';
     html += '<div class="card fade center"><div class="big">☕</div><h1>第 ' + (p.s + 1) + ' 段完成了，謝謝你</h1>';
     html += '<p>你的回答已經存好了。想先休息，可以直接關掉這個頁面，下次打開同一個連結，會從下一段接著填。</p></div>';
-    html += '<div class="card fade"><div class="eyebrow">下一段</div><h2>' + esc(nx.name) + '</h2><p>' + esc(nx.ask) + '</p>';
-    html += '<p class="muted">' + nx.items.length + ' 題・大約 ' + mins(nx.items.length) + ' 分鐘。還剩 ' + (SECS.length - p.s - 1) + ' 段。</p></div>';
+    html += '<p class="muted center">下一段：' + esc(nx.name) + '（' + nx.items.length + ' 題）</p>';
     next.textContent = '繼續下一段';
   } else if (p.t === 'end') {
     document.getElementById('crumbL').textContent = '完成';
@@ -312,12 +336,12 @@ function save(cb) {
   for (var id in dirty) { var a = ans[id]; items.push({id: id, v: Array.isArray(a.v) ? a.v.join('、') : a.v, n: a.n}); sent[id] = ser(id); }
   var mark = document.getElementById('savedMark');
   if (!items.length) { cb && cb(); return; }
-  saving = true; mark.textContent = '儲存中…'; mark.className = 'saved';
+  saving = true;
   fetch(API, {method: 'POST', headers: {'Content-Type': 'text/plain;charset=utf-8'}, body: JSON.stringify({test: TEST, items: items, pos: cur})})
     .then(function (r) { return r.json(); })
     .then(function (res) {
       if (!res || !res.ok) throw new Error((res && res.error) || 'save failed');
-      for (var k in sent) if (ser(k) === sent[k]) delete dirty[k]; saving = false; mark.textContent = '✓ 已儲存'; mark.className = 'saved ok'; cb && cb(); })
+      for (var k in sent) if (ser(k) === sent[k]) delete dirty[k]; saving = false; mark.textContent = ''; var f = document.querySelector('.savefail'); if (f) f.remove(); cb && cb(); })
     .catch(function () { saving = false; mark.textContent = '沒存到'; alertBox(); cb && cb(); });
 }
 function alertBox() {
